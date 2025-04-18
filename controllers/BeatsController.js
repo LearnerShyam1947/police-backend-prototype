@@ -10,14 +10,16 @@ const uploadBeatsRecords = async (req, res) => {
 
     try {
         const jsonData = excelToJson(req.file.buffer);
-        const dataWithCPS = checkPointsInRegions(jsonData);
-        const formattedRecords = dataWithCPS.map(mapLocationData);
+        const formattedRecords = jsonData.map(mapLocationData);
+        const finalRecords = checkPointsInRegions(formattedRecords);        
         const createdRecords = [];
 
 
-        for (const record of formattedRecords) {
+        for (const record of finalRecords) {
 
             const response = await axios.get(`http://localhost:3000/api/v1/criminals/phone-number/${record.mob}`);
+            console.log(record.mob, "    ", response.data);
+            
             const additionalDetails = response.data;
 
             const newBeatsRecord = new Beats({
@@ -100,16 +102,120 @@ const getTodaysBeats = async (req, res) => {
     }
 };
 
+const getTodaysUnMapBeats = async (req, res) => {
+    try {
+        const today = new Date();
+        
+        const startOfDay = new Date(today.setHours(0, 0, 0, 0)); 
+        const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+        
+        const filter = {
+            currentDate: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            },
+            currentPoliceStation: "Not Found"
+        };
+        
+        
+        const todaysBeats = await Beats.find(filter);
+
+        res.status(200).json({
+            success: true,
+            message: `total records : ${todaysBeats.length}`,
+            data: todaysBeats
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: err.message
+        });
+    }
+};
+
+
+const updateBeatStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({ success: false, message: "ID is required" });
+        }
+
+        const updatedBeat = await Beats.findByIdAndUpdate(
+            id,
+            { status: "Met", lastActivity: new Date() },
+            { new: true } // returns the updated document
+        );
+
+        if (!updatedBeat) {
+            return res.status(404).json({ success: false, message: "Beat record not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Status updated to 'Met'",
+            data: updatedBeat
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: err.message
+        });
+    }
+};
+
+const updateBeatPoliceStation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ps } = req.query;
+
+        if (!id || !ps) {
+            return res.status(400).json({ success: false, message: "ID and PS are required" });
+        }
+
+        const updatedBeat = await Beats.findByIdAndUpdate(
+            id,
+            { currentPoliceStation: ps },
+            { new: true } // returns the updated document
+        );
+
+        console.log("calling ............ ", id, "  ->  ", ps);
+        
+
+        if (!updatedBeat) {
+            return res.status(404).json({ success: false, message: "Beat record not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Status updated to 'Met'",
+            data: updatedBeat
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: err.message
+        });
+    }
+};
+
 function mapLocationData(data) {
     return {
-        mob: data.MOB,
+        mob: data.MOB || data['Mobile Number'],
         cgi: data.CGI,
         vlr: data.VLR,
         imei: data.IMEI,
         imsi: data.IMSI,
-        latitude: data.Lat,
-        longitude: data.Long,
-        mapUrl: `http://maps.google.com/maps?q=${data.Lat},${data.Long}`,
+        latitude: data.Lat || data.Latitude,
+        longitude: data.Long || data.Longitude,
+        mapUrl: data.MapsLink || `http://maps.google.com/maps?q=${data.Lat},${data.Long}`,
         lbsType: data.LBSType,
         currentPoliceStation: data.currentPoliceStation
     };
@@ -117,5 +223,8 @@ function mapLocationData(data) {
 
 module.exports = {
     uploadBeatsRecords,
-    getTodaysBeats
+    updateBeatStatus,
+    getTodaysBeats,
+    updateBeatPoliceStation,
+    getTodaysUnMapBeats
 }

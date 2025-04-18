@@ -481,7 +481,7 @@ const checkPointsInRegions = (queries) => {
     const result = [];
 
     queries.forEach((query) => {
-        const point = turf.point([query.Long, query.Lat]);
+        const point = turf.point([query.longitude, query.latitude]);
         let foundRegion = false;
 
         psRegions.features.forEach((feature) => {
